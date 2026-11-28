@@ -143,3 +143,49 @@ class PacTests(unittest.IsolatedAsyncioTestCase):
         '''
         out = subprocess.run(['node', '-e', script], capture_output=True, text=True)
         self.assertEqual(out.stdout.strip(), 'OK', out.stdout + out.stderr)
+
+
+class FragmentTests(unittest.IsolatedAsyncioTestCase):
+    def test_split_point_inside_sni(self):
+        hello = b'\x16\x03\x01\x02\x00' + b'x' * 20 + b'www.youtube.com' + b'y' * 30
+        cut = web_proxy._split_point(hello, 'www.youtube.com')
+        sni = hello.index(b'www.youtube.com')
+        self.assertTrue(sni < cut < sni + len('www.youtube.com'))
+        self.assertEqual(web_proxy._split_point(b'\x16\x03\x01', 'nothere.example'), 2)
+
+    async def test_direct_mode_splits_first_tls_packet(self):
+        received = []
+        done = asyncio.Event()
+
+        async def server(r, w):
+            first = await r.read(65536)
+            received.append(first)
+            await asyncio.sleep(0.15)
+            try:
+                rest = await asyncio.wait_for(r.read(65536), 0.2)
+            except asyncio.TimeoutError:
+                rest = b''
+            received.append(rest)
+            done.set()
+            w.close()
+
+        srv = await asyncio.start_server(server, '127.0.0.1', 0)
+        sport = srv.sockets[0].getsockname()[1]
+        proxy_config.web_domains = ['localhost']
+        proxy_config.connection_mode = 'direct'
+        web = await asyncio.start_server(_handle_web_client, '127.0.0.1', 0)
+        wport = web.sockets[0].getsockname()[1]
+        try:
+            r, w = await asyncio.open_connection('127.0.0.1', wport)
+            w.write(f'CONNECT localhost:{sport} HTTP/1.1\r\n\r\n'.encode())
+            await r.readline(); await r.readline()
+            hello = b'\x16\x03\x01\x02\x00' + b'a' * 10 + b'localhost' + b'b' * 40
+            w.write(hello); await w.drain()
+            await asyncio.wait_for(done.wait(), 3)
+            self.assertEqual(b''.join(received), hello)      # ничего не потеряно
+            self.assertLess(len(received[0]), len(hello))    # а пришло двумя частями
+            self.assertGreater(len(received[1]), 0)
+            w.close()
+        finally:
+            proxy_config.connection_mode = 'worker'
+            srv.close(); web.close()

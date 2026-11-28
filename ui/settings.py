@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 import socket
 from copy import deepcopy
 from dataclasses import dataclass
@@ -34,6 +35,31 @@ def prepare_settings(current: dict, values: dict, defaults: dict) -> SettingsCha
     return SettingsChange(config, changed_keys)
 
 
+_DOMAIN_RE = re.compile(
+    r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$"
+)
+
+
+def parse_domain_lines(text: str, defaults) -> Union[list, str]:
+    """Текст «по одному домену на строку» -> список.
+    Пустой текст или список как по умолчанию -> [] (значит, домены по умолчанию).
+    При ошибке возвращает строку с сообщением."""
+    result: list = []
+    for raw in re.split(r"[\s,;]+", text or ""):
+        item = raw.strip().lower()
+        if not item:
+            continue
+        item = re.sub(r"^[a-z][a-z0-9+.-]*://", "", item)  # убрать https://
+        item = item.split("/")[0].split(":")[0].lstrip("*.").strip(".")
+        if not _DOMAIN_RE.match(item):
+            return t("validation.bad_domain", domain=raw.strip())
+        if item not in result:
+            result.append(item)
+    if result == [d.lower() for d in defaults]:
+        return []
+    return result
+
+
 def validate_settings(values: dict, defaults: dict) -> Union[dict, str]:
     config = dict(values)
 
@@ -55,7 +81,9 @@ def validate_settings(values: dict, defaults: dict) -> Union[dict, str]:
     if "cfproxy_worker_domain" in config:
         config["cfproxy_worker_domain"] = coerce_domain_list(
             config["cfproxy_worker_domain"])
-    if config.get("cfproxy_worker_enabled") and not config.get("cfproxy_worker_domain"):
+    if (config.get("connection_mode", "worker") == "worker"
+            and config.get("cfproxy_worker_enabled")
+            and not config.get("cfproxy_worker_domain")):
         return t("validation.worker_empty")
 
     return config

@@ -41,6 +41,28 @@ def can_self_update() -> bool:
     return True
 
 
+def cleanup_old_files(exe: Path, attempts: int = 30, delay: float = 1.0) -> bool:
+    """Удалить старую версию после обновления и недокачанные файлы.
+
+    Старый exe может быть занят ещё несколько секунд после перезапуска,
+    поэтому удаление повторяется. Возвращает True, если ничего не осталось."""
+    import time
+
+    old = exe.with_name(exe.stem + "_old.exe")
+    for _ in range(max(1, attempts)):
+        leftovers = [old, *exe.parent.glob(exe.stem + "_tmp_*")]
+        remaining = []
+        for path in leftovers:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                remaining.append(path)
+        if not remaining:
+            return True
+        time.sleep(delay)
+    return False
+
+
 def apply_update(asset: dict, before_restart: Callable[[], None]) -> None:
     """Verify, replace and launch; keep the old executable if any step fails."""
     exe = Path(sys.executable)

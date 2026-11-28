@@ -72,5 +72,14 @@
   "update.available_install": "Доступна новая версия YT-Local-Proxy: {version} (у вас {current}).\n\nСкачать и установить сейчас? Программа перезапустится, старая версия будет удалена.",
   "update.manual": "Доступна новая версия YT-Local-Proxy: {version} (у вас {current}).\n\nАвтоматическая установка здесь недоступна. Открыть страницу загрузки?",
   "update.error": "Не удалось обновить программу:\n{msg}\n\nСтарая версия сохранена и продолжает работать.",
-  "update.title": "Обновление"
+  "update.title": "Обновление",
+  "section.method": "Способ подключения",
+  "method.worker.title": "Cloudflare Worker",
+  "method.worker.sub": "Через ваш домен · рекомендуется",
+  "method.direct.title": "Напрямую",
+  "method.direct.sub": "Без Worker, обход DPI · экспериментально",
+  "tip.method_direct": "Соединение идёт напрямую, но первый TLS-пакет делится на части, чтобы провайдер не определил YouTube. Работает не у всех провайдеров",
+  "section.domains": "Домены для обхода",
+  "label.domains_hint": "По одному домену на строку. Пустой список — домены YouTube по умолчанию",
+  "validation.bad_domain": "Некорректный домен: {domain}"
 }

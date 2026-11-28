@@ -207,3 +207,48 @@ class UpdateFlowTest(unittest.TestCase):
         stop.assert_not_called()
         unlock.assert_not_called()
         exit_process.assert_not_called()
+
+
+class CleanupOldFilesTest(unittest.TestCase):
+    def _dir(self):
+        import tempfile
+        from pathlib import Path
+        d = Path(tempfile.mkdtemp())
+        exe = d / "YT-Local-Proxy.exe"
+        exe.write_bytes(b"new")
+        return d, exe
+
+    def test_removes_old_version_and_partial_downloads(self):
+        d, exe = self._dir()
+        (d / "YT-Local-Proxy_old.exe").write_bytes(b"old")
+        (d / "YT-Local-Proxy_tmp_abc.exe").write_bytes(b"part")
+        self.assertTrue(windows_update.cleanup_old_files(exe, attempts=1, delay=0))
+        self.assertTrue(exe.exists())
+        self.assertFalse((d / "YT-Local-Proxy_old.exe").exists())
+        self.assertEqual(list(d.glob("*_tmp_*")), [])
+
+    def test_retries_while_old_file_is_still_locked(self):
+        from pathlib import Path
+        d, exe = self._dir()
+        old = d / "YT-Local-Proxy_old.exe"
+        old.write_bytes(b"old")
+        real_unlink = Path.unlink
+        calls = {"n": 0}
+
+        def flaky(self, *a, **kw):
+            if self.name.endswith("_old.exe") and calls["n"] < 2:
+                calls["n"] += 1
+                raise PermissionError("in use")
+            return real_unlink(self, *a, **kw)
+
+        with mock.patch.object(Path, "unlink", flaky):
+            self.assertTrue(windows_update.cleanup_old_files(exe, attempts=5, delay=0))
+        self.assertFalse(old.exists())
+        self.assertEqual(calls["n"], 2)
+
+    def test_gives_up_when_file_stays_locked(self):
+        from pathlib import Path
+        d, exe = self._dir()
+        (d / "YT-Local-Proxy_old.exe").write_bytes(b"old")
+        with mock.patch.object(Path, "unlink", side_effect=PermissionError("in use")):
+            self.assertFalse(windows_update.cleanup_old_files(exe, attempts=2, delay=0))

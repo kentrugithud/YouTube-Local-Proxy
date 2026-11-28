@@ -169,6 +169,27 @@ async def _tunnel_via_worker(ws, reader, writer):
         await ws.close()
 
 
+def _split_point(chunk: bytes, host: str) -> int:
+    """Где разрезать TLS ClientHello: посередине имени сайта (SNI)."""
+    idx = chunk.find(host.encode('ascii', 'ignore'))
+    if idx > 0:
+        return idx + max(1, len(host) // 2)
+    return 2
+
+
+async def _send_fragmented(remote_w: asyncio.StreamWriter, chunk: bytes, host: str):
+    """Отправить первый TLS-пакет двумя частями, чтобы DPI не увидел SNI целиком."""
+    if chunk[:1] == b'\x16' and len(chunk) > 4:  # TLS handshake
+        cut = min(_split_point(chunk, host), len(chunk) - 1)
+        remote_w.write(chunk[:cut])
+        await remote_w.drain()
+        await asyncio.sleep(0.02)
+        remote_w.write(chunk[cut:])
+    else:
+        remote_w.write(chunk)
+    await remote_w.drain()
+
+
 async def _tunnel_direct(host, port, reader, writer, early: bytes = b''):
     r2, w2 = await asyncio.wait_for(
         asyncio.open_connection(host, port), timeout=CONNECT_TIMEOUT)
@@ -207,7 +228,9 @@ async def _handle_web_client(reader: asyncio.StreamReader,
         # ---------- HTTPS: CONNECT host:port ----------
         if method.upper() == 'CONNECT':
             host, port = parse_hostport(target, 443)
-            via_worker = domain_matches(host, proxy_config.web_domains)
+            matched = domain_matches(host, proxy_config.web_domains)
+            via_worker = matched and proxy_config.connection_mode == 'worker'
+            fragment = matched and proxy_config.connection_mode == 'direct'
 
             if via_worker:
                 ws = await _open_worker_ws(host, port)
@@ -228,10 +251,15 @@ async def _handle_web_client(reader: asyncio.StreamReader,
                 writer.write(b'HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n')
                 await writer.drain()
                 return
-            log.debug('[web] %s:%d -> direct', host, port)
+            log.debug('[web] %s:%d -> direct%s', host, port,
+                      ' (fragmented)' if fragment else '')
             writer.write(b'HTTP/1.1 200 Connection Established\r\n\r\n')
             await writer.drain()
-            if rest:
+            if fragment:
+                first = rest or await asyncio.wait_for(reader.read(65536), 15)
+                if first:
+                    await _send_fragmented(remote_w, first, host)
+            elif rest:
                 remote_w.write(rest)
                 await remote_w.drain()
             t1 = asyncio.create_task(_pump_tcp(reader, remote_w))
@@ -306,7 +334,9 @@ async def start_web_proxy() -> Optional[asyncio.AbstractServer]:
     log.info('  Web proxy:     HTTP %s:%d  (Windows -> Прокси-сервер)',
              proxy_config.host, port)
     log.info('  Web domains:   %s', ', '.join(proxy_config.web_domains))
-    if not proxy_config.cfproxy_worker_domains:
+    log.info('  Mode:          %s', proxy_config.connection_mode)
+    if (proxy_config.connection_mode == 'worker'
+            and not proxy_config.cfproxy_worker_domains):
         log.warning('  Web proxy: Cloudflare Worker не задан — YouTube будет '
                     'идти напрямую (без обхода). Укажите --cfproxy-worker-domain')
     return server

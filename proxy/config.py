@@ -77,6 +77,7 @@ class ProxyConfig:
     force_test_dc: bool = False
     web_proxy_port: int = 0  # 0 = локальный HTTP-прокси выключен
     web_domains: List[str] = field(default_factory=list)
+    connection_mode: str = 'worker'  # 'worker' | 'direct'
 
     @property
     def h2_enabled(self) -> bool:

@@ -72,5 +72,14 @@
   "update.available_install": "A new version of YT-Local-Proxy is available: {version} (you have {current}).\n\nDownload and install now? The app will restart and the old version will be removed.",
   "update.manual": "A new version of YT-Local-Proxy is available: {version} (you have {current}).\n\nAutomatic installation is not available here. Open the download page?",
   "update.error": "Could not update the app:\n{msg}\n\nThe old version is kept and keeps working.",
-  "update.title": "Update"
+  "update.title": "Update",
+  "section.method": "Connection method",
+  "method.worker.title": "Cloudflare Worker",
+  "method.worker.sub": "Through your domain · recommended",
+  "method.direct.title": "Direct",
+  "method.direct.sub": "No Worker, DPI bypass · experimental",
+  "tip.method_direct": "Connects directly, but the first TLS packet is split into parts so your ISP cannot identify YouTube. Does not work with every ISP",
+  "section.domains": "Domains to bypass",
+  "label.domains_hint": "One domain per line. Empty list means the default YouTube domains",
+  "validation.bad_domain": "Invalid domain: {domain}"
 }

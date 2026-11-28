@@ -349,6 +349,10 @@ def apply_proxy_config(cfg: dict) -> bool:
         if cfg.get("cfproxy_worker_enabled", bool(worker_domains))
         else []
     )
+    pc.connection_mode = (
+        "direct" if cfg.get("connection_mode") == "direct" else "worker")
+    if pc.connection_mode == "direct":
+        pc.cfproxy_worker_domains = []
     pc.disable_secure = cfg.get("no_secure", DEFAULT_CONFIG["no_secure"])
     pc.web_domains = coerce_domain_list(
         cfg.get("web_domains", DEFAULT_CONFIG["web_domains"]))

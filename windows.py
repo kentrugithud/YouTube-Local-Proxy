@@ -45,7 +45,7 @@ from utils.tray_common import (
     save_config, start_proxy, stop_proxy,
 )
 from utils import update_check, win_system_proxy
-from utils.windows_update import apply_update, asset_name, can_self_update
+from utils.windows_update import apply_update, asset_name, can_self_update, cleanup_old_files
 from ui.settings_form import Updater
 from utils.tray_common import APP_DIR
 from ui.ctk_tray_ui import (
@@ -196,6 +196,8 @@ def _web_proxy_active() -> bool:
 
 
 def _worker_configured() -> bool:
+    if _config.get("connection_mode") == "direct":
+        return True  # Worker не нужен
     return bool(
         _config.get("cfproxy_worker_enabled")
         and coerce_domain_list(_config.get("cfproxy_worker_domain"))
@@ -512,12 +514,8 @@ def main() -> None:
     if IS_FROZEN:
         def _cleanup_old_exes():
             time.sleep(3)
-            exe = Path(sys.executable)
-            backup = exe.with_name(exe.stem + "_old.exe")
-            try:
-                backup.unlink(missing_ok=True)
-            except OSError:
-                pass
+            if not cleanup_old_files(Path(sys.executable)):
+                log.warning("Old version file could not be removed")
         threading.Thread(target=_cleanup_old_exes, daemon=True, name="cleanup-old").start()
 
     try:

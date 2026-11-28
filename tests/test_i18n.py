@@ -18,6 +18,7 @@ ALLOWED_UNTRANSLATED = frozenset({
     "language.ru",
     "section.cfproxy",
     "section.cfworker",
+    "method.worker.title",
     "settings.language",
 })
 

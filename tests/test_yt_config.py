@@ -67,3 +67,29 @@ class ValidateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DomainLinesTests(unittest.TestCase):
+    D = ["youtube.com", "googlevideo.com"]
+
+    def parse(self, text):
+        from ui.settings import parse_domain_lines
+        return parse_domain_lines(text, self.D)
+
+    def test_lines_and_cleanup(self):
+        self.assertEqual(
+            self.parse("YouTube.com\nhttps://www.example.org/path\n*.cdn.test.io:443\n"),
+            ["youtube.com", "www.example.org", "cdn.test.io"])
+
+    def test_duplicates_removed(self):
+        self.assertEqual(self.parse("a.com\nA.com\n, a.com"), ["a.com"])
+
+    def test_empty_or_default_means_defaults(self):
+        self.assertEqual(self.parse(""), [])
+        self.assertEqual(self.parse("   \n"), [])
+        self.assertEqual(self.parse("youtube.com\ngooglevideo.com"), [])
+
+    def test_bad_domain_gives_message(self):
+        for bad in ("nodot", "bad domain!.com", "-a.com", "a..com"):
+            with self.subTest(bad=bad):
+                self.assertIsInstance(self.parse(bad), str)

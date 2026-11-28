@@ -14,6 +14,7 @@ _DEFAULTS_COMMON: Dict[str, Any] = {
     "port": 8080,
     "verbose": False,
     "log_max_mb": 5,
+    "connection_mode": "worker",
     "cfproxy_worker_enabled": False,
     "cfproxy_worker_domain": [],
     "no_secure": False,
